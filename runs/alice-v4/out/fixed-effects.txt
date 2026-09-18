@@ -1,0 +1,5 @@
+logistic fog ~ year + station, n = 107423 reporting station-days, 10 stations
+year coefficient: -0.01758 (se 0.00126, z = -13.99, p = 1.73e-44)
+odds ratio per year: 0.98257  -> -1.74% per year, -45.0% over 34 years
+stations with a negative fitted trend: 8 of 10
+stations with a negative trend at p < 0.05: 4

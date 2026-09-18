@@ -96,7 +96,7 @@ $ H=$(sha256sum data/fog-nebel-gew.csv | cut -d' ' -f1)
 $ ./bin/cockpit ask "{\"ref\":\"sha256:$H\",\"query\":\"uses\"}"
 ```
 
-gave 13 (later 20+) lines of the form
+gave 13 lines of the form at the time, and 29 by the end of the session:
 
 ```
 sha256:01adcf23ee31b59d19a629468750de431625f10101a3a6f705d1e3150f9c30f5  kind=script  in=2 out=3
@@ -104,6 +104,8 @@ sha256:0c66ade558793866553a13074acc6db672cf87392962a485ab16d23d45da0ff6  kind=sc
 ...
 included 13 excluded 0
 ```
+
+(final count: `fog-nebel-gew.csv` → **29 included, 0 excluded**; `quakes.csv` → 7 included.)
 
 That is the whole answer. **No run name, no command, no signer, no date.** `kind=script in=2
 out=2` is the entire description of a run. To find out which of my own runs were in that list I

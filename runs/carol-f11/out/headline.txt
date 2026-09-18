@@ -1,0 +1,1 @@
+y-axis floor: 3.0 (not 0). trend zero-crossing: 2073

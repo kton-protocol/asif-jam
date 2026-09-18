@@ -1,0 +1,7 @@
+stations in balanced panel: 80, 105
+years: 1990-2024, station-days per year: 730-732
+slope: -0.0824 percentage points per year (se 0.0244, p = 0.001921)
+R^2: 0.256
+fitted value 1990: 6.84%   fitted value 2024: 4.04%
+fitted decline 1990-2024: -40.9%
+the fitted line reaches zero in 2073

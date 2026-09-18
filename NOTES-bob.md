@@ -488,7 +488,7 @@ i=0; while [ $i -lt 10 ]; do i=$((i+1))
 done
 ```
 
-Across 16 recorded runs I hit roughly 20 raced attempts. Two distinct failure messages:
+Across 15 recorded runs I hit roughly 20 raced attempts. Two distinct failure messages:
 
 ```
  ! [rejected]        HEAD -> main (fetch first)
@@ -553,7 +553,7 @@ with `base64 -d` and a python loop.
 # Part 5 — what I actually claimed, and where it breaks
 
 Claim as handed to me: *"Fog in Austria has declined by roughly a third since 1990 and is on
-track to disappear."* 17 runs, 16 of them recorded as fotons.
+track to disappear."* 15 run folders, all 15 recorded as fotons under my key (2 quakes, 11 fog, 2 verification re-runs of teammates' scripts), plus roughly 20 further container executions that ran and were thrown away by a lost push race.
 
 **What is true and survives the good Defensio** (`bob-f2`, `bob-f3`, `bob-f7`, `bob-f9`,
 `bob-f10`):

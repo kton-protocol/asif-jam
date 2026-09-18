@@ -6,6 +6,13 @@
 #
 # Everything you write goes in out/. Nothing else is recorded as an output.
 
+# This script finds its own directory, so it runs the same whether you call it from the repo root
+# (which is what the cockpit does inside the container) or from the run folder (which is what
+# RStudio does). Leave these three lines alone and everything below can use plain relative paths.
+a <- commandArgs(trailingOnly = FALSE)
+here <- dirname(sub("^--file=", "", a[grep("^--file=", a)]))
+if (length(here) == 1 && nzchar(here)) setwd(here)
+
 d <- read.csv("inputs/fog-nebel-gew.csv", stringsAsFactors = FALSE)
 d$year   <- as.integer(substr(d$time, 1, 4))
 d$period <- paste0(d$year - (d$year %% 5), "-", d$year - (d$year %% 5) + 4)

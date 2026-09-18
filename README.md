@@ -1,106 +1,88 @@
-# As-If Science Jam — team repository
+# As-If Science Jam — one repository, everybody in it
 
 Take a real dataset. Argue a conclusion that is almost certainly false, as persuasively as you can.
+**You may not fabricate.** Every number comes from the data, every step is reproducible, every
+figure is exactly what the code produced. Misleading with true statements is the exercise.
 
-**You may not fabricate.** Every number must come from the data, every step must be reproducible,
-and every figure must be exactly what your code produced. You are not trying to lie — you are
-trying to mislead with true statements, which is harder, and which is what actually happens in
-published research, journalism and politics.
+Everyone works in **this** repository. You pull each other's runs; your records and theirs sit in
+one registry. What differs per person is one thing: which key signs your work.
 
-Your analysis is recorded as you go. Before your **Defensio** you publish your lineage, and the
-team holding **Offensio** may re-run it. That is the whole game: they get your exact inputs by
-hash and your exact command, so what you cannot do is be vague about what you did.
-
-## The two things being recorded, which are not the same
-
-| | |
-|---|---|
-| **reproducible** | this figure is exactly what that code produced from that data — machine-checkable |
-| **true** | the conclusion drawn from it is honest — **not machine-checkable at all** |
-
-A flawless, fully reproducible chain can support an absurd conclusion. Both statements are correct.
-They are about different things, and most people hear the first and understand the second. Your job
-is to build one and the other side's job is to find where the thumb went on the scale.
-
-## Setup, once
+## Join
 
 ```bash
-bin/setup
+bin/setup alice          # your name; lowercase, no spaces
 ```
 
-Builds the cockpit, makes this team's signing identity, and binds the repo to itself. It prints
-`cockpit doctor` at the end; if that is unhappy, stop and fix it before working.
+Builds the cockpit, makes your signing key, and writes your `cockpit.config.json` — which is *not*
+committed, because it names you. Everything shared lives in `cockpit.config.shared.json`, which is.
+
+Re-run `bin/setup alice` after a `git pull` to start trusting teammates who joined after you did.
 
 ## The loop
 
 ```bash
-bin/jam fetch quakes            # pull the data — the pull is itself recorded
-bin/jam new q1 --from quakes    # a run folder with the inputs copied in
-#   ... edit runs/q1/analysis.R, run it (RStudio, Rscript, whatever) ...
-bin/jam publish q1              # record it: inputs, outputs, the exact command
-bin/jam list                    # everything you have tried
+git pull
+bin/jam new alice-1 --from fog        # clone the inputs into a run folder
+#   ... edit runs/alice-1/analysis.R — RStudio, vim, whatever ...
+./bin/cockpit publish '{"cmd":"Rscript runs/alice-1/analysis.R",
+                        "inputs":["runs/alice-1/analysis.R","runs/alice-1/inputs/fog-nebel-gew.csv"],
+                        "outputs":["runs/alice-1/out/fog-by-period.csv"]}'
 ```
 
-Work in `runs/<slug>/`. RStudio users: open the run folder as the working directory, or
-`setwd("runs/q1")` — `analysis.R` reads from `inputs/` and writes to `out/`, both relative.
+**That one command is the whole ceremony.** It runs your script *inside* the image this repository
+pins — R 4.3.3, no network, your repo mounted at `/work` — hashes what went in and came out, signs
+the record, commits, and pushes. There is no separate publish step, because running it and
+recording it are the same act: the string handed to the engine and the string recorded are one
+string.
 
-## Run folders
+If the push is rejected because a teammate pushed first: `git pull --rebase && git push`. The record
+is already made; only the push was behind.
 
-One per idea. They are cheap — make a lot of them.
+### Run folders
 
 ```
-runs/q1/
+runs/alice-1/
   RUN.md        what you were trying. Yours; nothing reads it
   inputs/       the exact bytes you started from, copied in
-  analysis.R    yours to edit
-  out/          everything your script writes — and only this is recorded as output
+  analysis.R    yours
+  out/          everything the script writes
 ```
 
-The inputs are **copied**, not linked, so a run folder is a whole thing: zip it and hand it over
-and the other team has exactly what you had. The copy shares its hash with the original, so the
-lineage still joins — kton matches on bytes, never on paths.
+Name them after yourself so three people's runs do not collide. Make a lot of them — that is the
+point. `bin/jam runs` lists the folders on disk.
 
-### Experimenting is free; publishing is a decision
+## The actual question we are testing
 
-`jam new` records nothing. You can make twenty run folders, keep two, and delete the rest, and
-none of that is anyone's business. `jam publish` is the deliberate act that makes a run
-re-runnable by someone else.
+You will end up with dozens of runs, across three people, in one repository. **Can you find
+anything afterwards?**
 
-That gap is not an accident of the tooling — it is one of the four places a thumb goes on the
-scale, and the other side is entitled to ask about it:
+Things you will want, and should try to get out of `./bin/cockpit ask`:
 
-| move | where it shows in a record |
-|---|---|
-| selective **sampling** | the fetch step: the URL *is* the decision |
-| selective **evidence** | which runs you published, and which you did not |
-| selective **agreement** | the normaliser used to call two runs "the same" |
-| selective **framing** | which figure you showed |
+- every run that used a particular input file
+- every run that produced a particular figure
+- which of your teammates' runs you can verify, and which you cannot
+- what a given run actually did, given only its id
+- the runs from the last hour, or the ones you have not looked at
 
-`jam list` shows you your own unpublished runs. Nobody else can see them. Deciding to publish all
-of them is a legitimate and quite strong Defensio move; so is publishing one and being ready to
-answer for it.
+The queries the cockpit offers are `producer`, `uses`, `lineage`, `reproductions`, `about` and
+`by`. Read what `./bin/cockpit ask` accepts and try to answer the questions above with it.
 
-## Checking the other side
-
-```bash
-bin/jam check <output-hash-or-foton-id>
-```
-
-Answers who produced those bytes and whether it verifies against the keys **this** repo trusts —
-never against a key the record declares about itself.
+**Where you cannot, write it down.** That is the result we are after — more than any analysis. Keep
+a `NOTES-<yourname>.md` and record: what you wanted to ask, what you tried, what came back, and
+what you had to do instead (`grep`? `ls`? open files by hand?). Be blunt and exact, including error
+messages.
 
 ## Examples
 
 | | |
 |---|---|
-| [`examples/quakes`](examples/quakes/TASK.md) | the warm-up. Spend an hour, not a day |
+| [`examples/quakes`](examples/quakes/TASK.md) | the warm-up. An hour, not a day |
 | [`examples/fog`](examples/fog/TASK.md) | the real one |
 
-Read the `TASK.md` before you fetch. It tells you what the other side will look for.
+`data/` is already fetched and committed, so everybody starts from the same bytes.
 
-## What is private and what is not
+## What is private
 
-`keys/team.key` is this team's private signing key. It is not committed and must not be. Everything
-in `data/`, `runs/` and `registry/` is committed and pushed, which is what makes your work
-checkable — and what makes a half-finished thought you left in `out/` visible. Nothing is deleted
-from a registry once it is in, so publish deliberately.
+`keys/*.key` is your private signing key and is not committed. Everything else is — `data/`,
+`runs/`, `registry/` — which is what makes the work checkable, and what makes a half-finished
+thought you left in `out/` visible to everyone. Nothing leaves a registry once it is in.

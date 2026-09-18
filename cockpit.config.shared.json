@@ -1,0 +1,16 @@
+{
+  "paths": {
+    "plankton_dir": "registry/plankton",
+    "nekton_dir": "registry/nekton",
+    "templates_dir": "templates",
+    "keys_dir": "keys",
+    "bin_dir": "bin"
+  },
+  "verbs": { "publish": true, "say": true, "ask": true },
+  "claims": { "allowedTemplates": ["reproduces", "working-on"] },
+  "reproduction": { "requiredLevel": "L0", "normalizer": "" },
+  "execution": {
+    "image": "oci://rocker/r-ver@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309",
+    "network": false
+  }
+}

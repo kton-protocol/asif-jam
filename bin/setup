@@ -1,63 +1,60 @@
 #!/usr/bin/env bash
-# One-time setup for a team repo: build the cockpit, make this team's signing identity, and bind
-# the repo to itself. Safe to re-run.
+# bin/setup <your-name> — join this repository as yourself.
+#
+# Everyone works in the SAME repository. What differs per person is exactly one thing: which key
+# signs your records. So the shared half of the configuration is committed
+# (cockpit.config.shared.json) and the half that names you is written here and never committed.
+#
+# Safe to re-run. Re-run it after pulling, to pick up teammates' public keys.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
+
+ME="${1:-}"
+[ -n "$ME" ] || { echo "usage: bin/setup <your-name>   (e.g. bin/setup alice)" >&2; exit 1; }
+case "$ME" in *[!a-z0-9-]*) echo "keep it to lowercase letters, digits and dashes" >&2; exit 1;; esac
 
 COCKPIT_SRC="${COCKPIT_SRC:-$(dirname "$REPO")/kton-cockpit}"
 KTON_SRC="${KTON_SRC:-$(dirname "$REPO")/kton-pinned}"
 
 echo "== binaries =="
 mkdir -p bin
-if [ ! -x bin/cockpit ]; then
-  [ -d "$COCKPIT_SRC" ] || { echo "no kton-cockpit checkout at $COCKPIT_SRC (set COCKPIT_SRC)" >&2; exit 1; }
-  (cd "$COCKPIT_SRC" && go build -o "$REPO/bin/cockpit" ./cmd/cockpit)
-fi
-# plankton is used by `jam` only for hashing a file the way the substrate does.
-if [ ! -x bin/plankton ]; then
-  [ -d "$KTON_SRC" ] || { echo "no kton checkout at $KTON_SRC (set KTON_SRC)" >&2; exit 1; }
-  (cd "$KTON_SRC" && go build -o "$REPO/bin/plankton" ./reference/cmd/plankton
-                     go build -o "$REPO/bin/nekton"   ./nekton/reference/cmd/nekton)
-fi
-echo "  bin/cockpit $(./bin/cockpit version | head -1)"
+[ -x bin/cockpit ]  || (cd "$COCKPIT_SRC" && go build -o "$REPO/bin/cockpit" ./cmd/cockpit)
+[ -x bin/plankton ] || (cd "$KTON_SRC" && go build -o "$REPO/bin/plankton" ./reference/cmd/plankton)
+[ -x bin/nekton ]   || (cd "$KTON_SRC" && go build -o "$REPO/bin/nekton"   ./nekton/reference/cmd/nekton)
+echo "  $(./bin/cockpit version | head -1)"
 
-echo "== identity =="
-mkdir -p keys registry/plankton registry/nekton registry/keys work
-if [ ! -f keys/team.key ]; then
-  ./bin/plankton keygen keys/team        >/dev/null
-  ./bin/nekton   keygen keys/team-claims >/dev/null
-  cp keys/team.pub keys/team-claims.pub registry/keys/
-  echo "  new signing identity — keys/team.key is PRIVATE and is not committed"
+echo "== your identity =="
+mkdir -p keys registry/plankton registry/nekton registry/keys runs work
+if [ ! -f "keys/$ME.key" ]; then
+  ./bin/plankton keygen "keys/$ME"        >/dev/null
+  ./bin/nekton   keygen "keys/$ME-claims" >/dev/null
+  cp "keys/$ME.pub" "keys/$ME-claims.pub" registry/keys/
+  echo "  new key for $ME — keys/$ME.key is PRIVATE and is not committed"
 else
-  echo "  keys/team.key already exists, keeping it"
+  echo "  keys/$ME.key already exists, keeping it"
 fi
 
-echo "== binding =="
-ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
-case "$ORIGIN" in
-  *github.com[:/]*) OWNER_REPO="${ORIGIN#*github.com}"; OWNER_REPO="${OWNER_REPO#[:/]}"; OWNER_REPO="${OWNER_REPO%.git}";;
-  *) echo "  this repo has no github.com origin — the cockpit refuses to act without one" >&2; exit 1;;
-esac
-OWNER="${OWNER_REPO%%/*}"; NAME="${OWNER_REPO##*/}"
-python3 - cockpit.config.json "$OWNER" "$NAME" <<'PY'
-import json, os, sys
-path, owner, name = sys.argv[1:4]
-cfg = json.load(open(path)) if os.path.exists(path) else {}
-cfg.update({
-  "repo":     {"owner": owner, "name": name},
-  "paths":    {"plankton_dir": "registry/plankton", "nekton_dir": "registry/nekton",
-               "templates_dir": "templates", "keys_dir": "keys", "bin_dir": "bin"},
-  "identity": {"session_id": "team", "plankton_key": "keys/team.key",
-               "nekton_key": "keys/team-claims.key"},
-  "verbs":    {"publish": True, "say": True, "ask": True},
-  "claims":   {"allowedTemplates": ["reproduces", "working-on"]},
-  "trust":    {"tiers": {"self": ["registry/keys/team.pub", "registry/keys/team-claims.pub"]}},
-  "reproduction": {"requiredLevel": "L0", "normalizer": ""},
-})
-json.dump(cfg, open(path, "w"), indent=2)
+echo "== configuration =="
+ORIGIN="$(git remote get-url origin)"
+OWNER_REPO="${ORIGIN#*github.com}"; OWNER_REPO="${OWNER_REPO#[:/]}"; OWNER_REPO="${OWNER_REPO%.git}"
+python3 - "$ME" "${OWNER_REPO%%/*}" "${OWNER_REPO##*/}" <<'PY'
+import glob, json, os, sys
+me, owner, name = sys.argv[1:4]
+cfg = json.load(open("cockpit.config.shared.json"))
+cfg["repo"] = {"owner": owner, "name": name}
+cfg["identity"] = {"session_id": me,
+                   "plankton_key": f"keys/{me}.key",
+                   "nekton_key":   f"keys/{me}-claims.key"}
+# Everyone who has pushed a public key is in the team tier. Re-running setup after a pull is how
+# you start being able to verify a teammate who joined after you did.
+mine = sorted(p for p in glob.glob("registry/keys/*.pub") if os.path.basename(p).startswith(me + "."))
+mine += sorted(p for p in glob.glob("registry/keys/*.pub") if os.path.basename(p).startswith(me + "-claims."))
+team = sorted(set(glob.glob("registry/keys/*.pub")) - set(mine))
+cfg["trust"] = {"tiers": {"self": mine, "team": team}}
+json.dump(cfg, open("cockpit.config.json", "w"), indent=2)
+print(f"  you are '{me}'; {len(team)} teammate key(s) trusted")
 PY
-echo "  bound to $OWNER/$NAME"
-./bin/cockpit doctor | sed 's/^/  /'
+./bin/cockpit doctor | grep -E "bound to|trust tiers|execution|git:" | sed 's/^/  /'
 echo ""
-echo "Ready.  Next:  bin/jam fetch quakes"
+echo "Next:  bin/jam new ${ME}-1 --from fog"

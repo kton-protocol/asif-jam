@@ -22,34 +22,51 @@ Re-run `bin/setup alice` after a `git pull` to start trusting teammates who join
 
 ```bash
 git pull
-bin/jam new alice-1 --from fog        # clone the inputs into a run folder
+./bin/cockpit run new alice-1 --from examples/fog     # clone the inputs into a run folder
 #   ... edit runs/alice-1/analysis.R — RStudio, vim, whatever ...
-./bin/cockpit publish '{"cmd":"Rscript runs/alice-1/analysis.R",
-                        "inputs":["runs/alice-1/analysis.R","runs/alice-1/inputs/fog-nebel-gew.csv"],
-                        "outputs":["runs/alice-1/out/fog-by-period.csv"]}'
+./bin/cockpit run alice-1                             # run it and record it
 ```
 
-**That one command is the whole ceremony.** It runs your script *inside* the image this repository
-pins — R 4.3.3, no network, your repo mounted at `/work` — hashes what went in and came out, signs
-the record, commits, and pushes. There is no separate publish step, because running it and
-recording it are the same act: the string handed to the engine and the string recorded are one
-string.
+`run` executes your script **inside** the image this repository pins — R 4.3.3, no network, the
+repo mounted at `/work` — takes whatever it wrote to `out/` as the outputs, signs the record,
+commits and pushes. You name nothing. There is no separate publish step, because running it and
+recording it are the same act.
 
-If the push is rejected because a teammate pushed first: `git pull --rebase && git push`. The record
-is already made; only the push was behind.
+If somebody pushed while you were running, it says so and the record is already made:
+`git pull --rebase && git push`.
 
 ### Run folders
 
 ```
 runs/alice-1/
   RUN.md        what you were trying. Yours; nothing reads it
-  inputs/       the exact bytes you started from, copied in
+  inputs/       the exact bytes you started from
   analysis.R    yours
-  out/          everything the script writes
+  out/          cleared before each run; whatever lands here is the record's output
 ```
 
 Name them after yourself so three people's runs do not collide. Make a lot of them — that is the
-point. `bin/jam runs` lists the folders on disk.
+point. `./bin/cockpit run list` shows them.
+
+**To build on somebody's work, clone their run:**
+
+```bash
+./bin/cockpit run new alice-2 --from runs/bob-f3
+```
+
+You get their inputs and their script, and not their results. Because the inputs keep their hashes,
+the two runs join in the graph without anybody declaring a link.
+
+## Finding things again
+
+```bash
+./bin/cockpit ask '{"query":"uses","ref":"data/fog-nebel-gew.csv"}'   # every run that read it
+./bin/cockpit ask '{"query":"producer","ref":"runs/bob-f3/out/fog.png"}'  # who made this figure
+./bin/cockpit ask '{"query":"record","ref":"sha256:7b7b4259…"}'       # what that run actually did
+```
+
+A ref is either a `sha256:…` or **a path to a file you have**, which gets hashed for you. The id
+`record` prints comes from `producer`, so one answer is the next question.
 
 ## The actual question we are testing
 

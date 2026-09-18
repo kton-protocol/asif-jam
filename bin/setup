@@ -14,28 +14,18 @@ ME="${1:-}"
 [ -n "$ME" ] || { echo "usage: bin/setup <your-name>   (e.g. bin/setup alice)" >&2; exit 1; }
 case "$ME" in *[!a-z0-9-]*) echo "keep it to lowercase letters, digits and dashes" >&2; exit 1;; esac
 
-COCKPIT_SRC="${COCKPIT_SRC:-$(dirname "$REPO")/kton-cockpit}"
-KTON_SRC="${KTON_SRC:-$(dirname "$REPO")/kton-pinned}"
-
-echo "== binaries =="
-mkdir -p bin
-[ -x bin/cockpit ]  || (cd "$COCKPIT_SRC" && go build -o "$REPO/bin/cockpit" ./cmd/cockpit)
-[ -x bin/plankton ] || (cd "$KTON_SRC" && go build -o "$REPO/bin/plankton" ./reference/cmd/plankton)
-[ -x bin/nekton ]   || (cd "$KTON_SRC" && go build -o "$REPO/bin/nekton"   ./nekton/reference/cmd/nekton)
-echo "  $(./bin/cockpit version | head -1)"
-
-echo "== your identity =="
-mkdir -p keys registry/plankton registry/nekton registry/keys runs work
-if [ ! -f "keys/$ME.key" ]; then
-  ./bin/plankton keygen "keys/$ME"        >/dev/null
-  ./bin/nekton   keygen "keys/$ME-claims" >/dev/null
-  cp "keys/$ME.pub" "keys/$ME-claims.pub" registry/keys/
-  echo "  new key for $ME — keys/$ME.key is PRIVATE and is not committed"
-else
-  echo "  keys/$ME.key already exists, keeping it"
+# One binary. The kernels are linked into it, so there is nothing else to install.
+if [ ! -x bin/cockpit ]; then
+  SRC="${COCKPIT_SRC:-$(dirname "$REPO")/kton-cockpit}"
+  [ -d "$SRC" ] || { echo "no kton-cockpit checkout at $SRC (set COCKPIT_SRC)" >&2; exit 1; }
+  (cd "$SRC" && go build -o "$REPO/bin/cockpit" ./cmd/cockpit)
 fi
+echo "$(./bin/cockpit version | head -1)"
 
-echo "== configuration =="
+mkdir -p keys registry/plankton registry/nekton registry/keys runs
+./bin/cockpit keygen "$ME"
+cp "keys/$ME.pub" "keys/$ME-claims.pub" registry/keys/
+
 ORIGIN="$(git remote get-url origin)"
 OWNER_REPO="${ORIGIN#*github.com}"; OWNER_REPO="${OWNER_REPO#[:/]}"; OWNER_REPO="${OWNER_REPO%.git}"
 python3 - "$ME" "${OWNER_REPO%%/*}" "${OWNER_REPO##*/}" <<'PY'
@@ -44,17 +34,25 @@ me, owner, name = sys.argv[1:4]
 cfg = json.load(open("cockpit.config.shared.json"))
 cfg["repo"] = {"owner": owner, "name": name}
 cfg["identity"] = {"session_id": me,
-                   "plankton_key": f"keys/{me}.key",
-                   "nekton_key":   f"keys/{me}-claims.key"}
-# Everyone who has pushed a public key is in the team tier. Re-running setup after a pull is how
-# you start being able to verify a teammate who joined after you did.
-mine = sorted(p for p in glob.glob("registry/keys/*.pub") if os.path.basename(p).startswith(me + "."))
-mine += sorted(p for p in glob.glob("registry/keys/*.pub") if os.path.basename(p).startswith(me + "-claims."))
+                   "plankton_key": f"keys/{me}.key", "nekton_key": f"keys/{me}-claims.key"}
+mine = sorted(p for p in glob.glob("registry/keys/*.pub")
+              if os.path.basename(p).split(".")[0].split("-claims")[0] == me)
 team = sorted(set(glob.glob("registry/keys/*.pub")) - set(mine))
 cfg["trust"] = {"tiers": {"self": mine, "team": team}}
 json.dump(cfg, open("cockpit.config.json", "w"), indent=2)
-print(f"  you are '{me}'; {len(team)} teammate key(s) trusted")
+print(f"you are '{me}'; {len(team)} teammate key(s) trusted")
 PY
-./bin/cockpit doctor | grep -E "bound to|trust tiers|execution|git:" | sed 's/^/  /'
+
+# Your public key has to reach the others or nothing you sign verifies for them. Doing it here
+# rather than telling you to: a first run of this test spent an hour with three byte-identical
+# results reporting "1 verified signer, 2 excluded" because nobody had pushed a .pub file.
+git add registry/keys
+if ! git diff --cached --quiet; then
+  git -c user.name="$ME" -c user.email="$ME@cockpit.local" commit -qm "keys: $ME joins"
+  git pull -q --rebase && git push -q
+  echo "your public key is pushed — teammates will trust you after their next bin/setup"
+fi
+
+./bin/cockpit doctor | grep -E "bound to|trust tiers|execution" | sed 's/^/  /'
 echo ""
-echo "Next:  bin/jam new ${ME}-1 --from fog"
+echo "Next:  ./bin/cockpit run new ${ME}-1 --from examples/fog"

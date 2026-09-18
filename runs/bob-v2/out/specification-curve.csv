@@ -1,0 +1,13 @@
+"spec","first","last","pct_change"
+"all stations, 5y windows",7.13,4.95,-30.6
+"all stations, 10y windows",8.16,5.21,-36.1
+"balanced panel (80,105), 5y",6.57,4.11,-37.5
+"balanced panel, 10y",6.89,4.48,-35
+"stations with >=30 good years",8.79,4.95,-43.7
+"fog season Oct-Mar, all stations",11.21,8.46,-24.5
+"fog season, balanced panel",11.86,8.06,-32
+"Nov-Jan peak only, all stations",12.28,11.62,-5.4
+"Nov-Jan peak, balanced panel",12.28,11.74,-4.4
+"incl. partial 2025, all stations",7.13,4.99,-30.1
+"summer Apr-Sep, all stations",3.02,1.49,-50.6
+"single wettest station (124)",13.15,10.95,-16.7

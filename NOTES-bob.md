@@ -547,3 +547,46 @@ Six questions, 45 runs, three people. One answered cleanly (Q1, and only after I
 file myself), one half (Q2), one answered as a binary that depends on a `git add` (Q3),
 three not at all (Q4, Q5, Q6). For all six I ended up in `registry/plankton/objects/sha256/`
 with `base64 -d` and a python loop.
+
+---
+
+# Part 5 — what I actually claimed, and where it breaks
+
+Claim as handed to me: *"Fog in Austria has declined by roughly a third since 1990 and is on
+track to disappear."* 17 runs, 16 of them recorded as fotons.
+
+**What is true and survives the good Defensio** (`bob-f2`, `bob-f3`, `bob-f7`, `bob-f9`,
+`bob-f10`):
+
+- The naive starter rate falls 30.6% across the window — "roughly a third" — but its
+  denominator falls 43.2% (3650 → 2073 reporting station-days), so on its own it proves
+  nothing.
+- On a fixed panel of complete station-years (7 stations, rule fixed before looking) the
+  rate falls **38.2%**, with the denominator moving only −12.1%. The count version — fog
+  days per complete station-year — falls from **31.00 to 17.80**, OLS −0.463 days/year,
+  p = 3.2e-08. Integer over integer.
+- **The denominator artefact was hiding part of the decline, not creating it.** That is the
+  answer to "show us the count, not the rate": the count falls harder than the rate.
+- 24 specifications, all 24 negative, median −37.9%, range −42.2% to −32.7%. Leave any one
+  station out and it is still −25.8% to −49.5%.
+
+**Where it breaks, in my own record:**
+
+1. `bob-f4` — `gew` on the *same station-days* falls **48.9%**, more than `nebel`'s 38.1%.
+   The control indicator moves further than the thing being claimed. My defence is `bob-f5`:
+   the two indicators do not share a season (nebel peaks in November at 18.14% when gew is
+   at 0.52%; gew peaks in July at 22.02% when nebel is at 1.86%), so a single change in
+   observing practice would have had to be applied in both halves of the year. That is a
+   defence, not a refutation.
+2. `bob-f11`, after reading carol-f8 — on **1990-2007**, the window all ten stations cover,
+   only 6 of 10 stations decline (p = 0.377), and my own panel gives 5 of 7 (p = 0.227).
+   The 7-of-7 unanimity in `bob-f6` comes from the *length* of the window, not from station
+   selection. The decline is concentrated after about 2008. **"Since 1990" is rhetoric.**
+3. `bob-f8` — "on track to disappear" is a choice of functional form and nothing else. The
+   linear fit hits zero in 2065 with a 95% CI of **1609 to 2883**. A log-linear fit of the
+   same 35 points has R² 0.606 against the linear fit's 0.609 — indistinguishable — and
+   never reaches zero: half-life 37 years, still 4.60 fog days a year in 2100.
+
+So: *fog declined, substantially, and most of it after 2008, and it is not being abolished.*
+Every step of that is in the registry under my key, including the three parts that damage
+the claim I was told to argue.

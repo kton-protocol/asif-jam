@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# jam — run folders for the As-If Science Jam.
+#
+# The thing this manages is the gap between experimenting and claiming. You will try twenty
+# specifications and take one to your Defensio. Trying is free and leaves no record; publishing is
+# a deliberate act and leaves one that the other side can re-run. `jam` keeps those two apart so
+# that neither is accidental.
+#
+#   jam fetch   <example>          pull the data and RECORD the pull — the URL is a sampling decision
+#   jam new     <slug> --from <ex> a run folder with the inputs copied in, and a script to edit
+#   jam list                       every run you have, published or not
+#   jam publish <slug>             record this run: inputs, outputs, the exact command
+#   jam check   <ref>              what produced these bytes, and who stands behind it
+#
+# Run folders are cheap. Make one per idea and throw them away.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO"
+
+COCKPIT="${COCKPIT_BIN:-$REPO/bin/cockpit}"
+[ -x "$COCKPIT" ] || { echo "no cockpit at $COCKPIT — run: jam setup" >&2; exit 1; }
+
+die()  { echo "jam: $*" >&2; exit 1; }
+say()  { printf '  %s\n' "$*"; }
+head_() { printf '\n== %s ==\n' "$*"; }
+
+# --- fetch -------------------------------------------------------------------------------------
+# The pull is the first node of your lineage. What you asked the API for IS the sampling decision,
+# so it is recorded as its own foton rather than happening quietly before the work starts.
+cmd_fetch() {
+  local ex="${1:-}"; [ -n "$ex" ] || die "usage: jam fetch <example>"
+  local script="examples/$ex/fetch.sh"
+  [ -f "$script" ] || die "no examples/$ex/fetch.sh"
+
+  head_ "fetching $ex"
+  local out; out="$(bash "$script")"      # prints the file it wrote
+  [ -f "$out" ] || die "$script did not produce $out"
+  say "$out ($(du -h "$out" | cut -f1))"
+
+  local cmdline; cmdline="$(sed -n 's/^# *RECORD-AS: *//p' "$script" | head -1)"
+  [ -n "$cmdline" ] || cmdline="bash $script"
+
+  head_ "recording the pull"
+  "$COCKPIT" publish "$(printf '{"cmd":%s,"inputs":[%s],"outputs":[%s]}' \
+      "$(json_str "$cmdline")" "$(json_str "$script")" "$(json_str "$out")")" --field fotonId \
+    | sed 's/^/  foton /'
+}
+
+# --- new ---------------------------------------------------------------------------------------
+cmd_new() {
+  local slug="${1:-}"; shift || true
+  [ -n "$slug" ] || die "usage: jam new <slug> --from <example>"
+  local ex=""
+  while [ $# -gt 0 ]; do
+    case "$1" in --from) ex="${2:-}"; shift 2;; *) die "unknown option $1";; esac
+  done
+  [ -n "$ex" ] || die "jam new needs --from <example>"
+  [ -d "examples/$ex" ] || die "no examples/$ex"
+  local dir="runs/$slug"
+  [ -e "$dir" ] && die "$dir already exists — pick another slug, or delete it"
+
+  mkdir -p "$dir/inputs" "$dir/out"
+
+  # The inputs are COPIED, not linked. A run folder is a whole thing: you can zip it, hand it to
+  # the other team, and they have exactly what you had. The copy shares its hash with the original,
+  # so lineage still joins them — kton matches on bytes, never on paths.
+  local n=0 f
+  for f in $(sed -n 's/^# *INPUT: *//p' "examples/$ex/TASK.md"); do
+    [ -f "$f" ] || die "$f is missing — run: jam fetch $ex"
+    cp "$f" "$dir/inputs/$(basename "$f")"; n=$((n+1))
+  done
+  [ "$n" -gt 0 ] || die "examples/$ex/TASK.md declares no '# INPUT:' lines"
+
+  cp "examples/$ex/starter.R" "$dir/analysis.R"
+  cat > "$dir/RUN.md" <<EOF
+# $slug
+
+**From:** $ex
+**Started:** $(date -u +%Y-%m-%dT%H:%MZ)
+
+## What I am trying
+
+<!-- one or two lines. Your own note; nothing reads this but you. -->
+
+## What happened
+
+EOF
+  head_ "runs/$slug"
+  say "inputs/   $n file(s), copied — the exact bytes"
+  say "analysis.R  yours to edit"
+  say "out/      whatever your script writes"
+  say ""
+  say "next:  edit runs/$slug/analysis.R, run it, then: jam publish $slug"
+}
+
+# --- list --------------------------------------------------------------------------------------
+cmd_list() {
+  local any=0
+  head_ "runs"
+  for d in runs/*/; do
+    [ -d "$d" ] || continue
+    any=1
+    local slug; slug="$(basename "$d")"
+    local state="not published"
+    [ -f "$d/.published" ] && state="foton $(cut -c1-19 < "$d/.published")…"
+    printf '  %-28s %-14s %s\n' "$slug" "$(ls "$d/out" 2>/dev/null | wc -l) output(s)" "$state"
+  done
+  [ "$any" = 1 ] || say "none yet — jam new <slug> --from <example>"
+  echo
+  echo "  Unpublished runs are invisible to everyone but you. That is the point, and it is also"
+  echo "  the thing the other side will ask about: how many did you run?"
+}
+
+# --- publish -----------------------------------------------------------------------------------
+cmd_publish() {
+  local slug="${1:-}"; [ -n "$slug" ] || die "usage: jam publish <slug>"
+  local dir="runs/$slug"
+  [ -d "$dir" ] || die "no $dir"
+  local outs; outs=$(find "$dir/out" -type f 2>/dev/null | sort)
+  [ -n "$outs" ] || die "$dir/out is empty — run your analysis first"
+
+  local ins; ins=$(find "$dir/inputs" -type f 2>/dev/null | sort)
+  ins="$ins
+$dir/analysis.R"
+
+  local cmdline="Rscript $dir/analysis.R"
+  head_ "publishing $slug"
+  say "cmd      $cmdline"
+  say "inputs   $(wc -l <<<"$ins") file(s)"
+  say "outputs  $(wc -l <<<"$outs") file(s)"
+
+  local json; json=$(printf '{"cmd":%s,"inputs":[%s],"outputs":[%s]}' \
+    "$(json_str "$cmdline")" "$(json_arr "$ins")" "$(json_arr "$outs")")
+  local id; id="$("$COCKPIT" publish "$json" --field fotonId)"
+  echo "$id" > "$dir/.published"
+  say ""
+  say "foton $id"
+  say "the other side can now re-run this from the record alone."
+}
+
+# --- check -------------------------------------------------------------------------------------
+# The Offensio move: given an output hash or a foton id, who produced it and does it verify here.
+cmd_check() {
+  local ref="${1:-}"; [ -n "$ref" ] || die "usage: jam check <hash-or-foton-id>"
+  "$COCKPIT" ask "$(printf '{"query":"producer","ref":%s}' "$(json_str "$ref")")"
+}
+
+# --- helpers -----------------------------------------------------------------------------------
+json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+json_arr() { python3 -c 'import json,sys; print(",".join(json.dumps(l) for l in sys.stdin.read().split() if l))' <<<"$1"; }
+
+case "${1:-}" in
+  fetch)   shift; cmd_fetch   "$@";;
+  new)     shift; cmd_new     "$@";;
+  list)    shift; cmd_list    "$@";;
+  publish) shift; cmd_publish "$@";;
+  check)   shift; cmd_check   "$@";;
+  *) sed -n '3,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2;;
+esac

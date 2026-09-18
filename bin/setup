@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# One-time setup for a team repo: build the cockpit, make this team's signing identity, and bind
+# the repo to itself. Safe to re-run.
+set -euo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO"
+
+COCKPIT_SRC="${COCKPIT_SRC:-$(dirname "$REPO")/kton-cockpit}"
+KTON_SRC="${KTON_SRC:-$(dirname "$REPO")/kton-pinned}"
+
+echo "== binaries =="
+mkdir -p bin
+if [ ! -x bin/cockpit ]; then
+  [ -d "$COCKPIT_SRC" ] || { echo "no kton-cockpit checkout at $COCKPIT_SRC (set COCKPIT_SRC)" >&2; exit 1; }
+  (cd "$COCKPIT_SRC" && go build -o "$REPO/bin/cockpit" ./cmd/cockpit)
+fi
+# plankton is used by `jam` only for hashing a file the way the substrate does.
+if [ ! -x bin/plankton ]; then
+  [ -d "$KTON_SRC" ] || { echo "no kton checkout at $KTON_SRC (set KTON_SRC)" >&2; exit 1; }
+  (cd "$KTON_SRC" && go build -o "$REPO/bin/plankton" ./reference/cmd/plankton
+                     go build -o "$REPO/bin/nekton"   ./nekton/reference/cmd/nekton)
+fi
+echo "  bin/cockpit $(./bin/cockpit version | head -1)"
+
+echo "== identity =="
+mkdir -p keys registry/plankton registry/nekton registry/keys work
+if [ ! -f keys/team.key ]; then
+  ./bin/plankton keygen keys/team        >/dev/null
+  ./bin/nekton   keygen keys/team-claims >/dev/null
+  cp keys/team.pub keys/team-claims.pub registry/keys/
+  echo "  new signing identity — keys/team.key is PRIVATE and is not committed"
+else
+  echo "  keys/team.key already exists, keeping it"
+fi
+
+echo "== binding =="
+ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
+case "$ORIGIN" in
+  *github.com[:/]*) OWNER_REPO="${ORIGIN#*github.com}"; OWNER_REPO="${OWNER_REPO#[:/]}"; OWNER_REPO="${OWNER_REPO%.git}";;
+  *) echo "  this repo has no github.com origin — the cockpit refuses to act without one" >&2; exit 1;;
+esac
+OWNER="${OWNER_REPO%%/*}"; NAME="${OWNER_REPO##*/}"
+python3 - cockpit.config.json "$OWNER" "$NAME" <<'PY'
+import json, os, sys
+path, owner, name = sys.argv[1:4]
+cfg = json.load(open(path)) if os.path.exists(path) else {}
+cfg.update({
+  "repo":     {"owner": owner, "name": name},
+  "paths":    {"plankton_dir": "registry/plankton", "nekton_dir": "registry/nekton",
+               "templates_dir": "templates", "keys_dir": "keys", "bin_dir": "bin"},
+  "identity": {"session_id": "team", "plankton_key": "keys/team.key",
+               "nekton_key": "keys/team-claims.key"},
+  "verbs":    {"publish": True, "say": True, "ask": True},
+  "claims":   {"allowedTemplates": ["reproduces", "working-on"]},
+  "trust":    {"tiers": {"self": ["registry/keys/team.pub", "registry/keys/team-claims.pub"]}},
+  "reproduction": {"requiredLevel": "L0", "normalizer": ""},
+})
+json.dump(cfg, open(path, "w"), indent=2)
+PY
+echo "  bound to $OWNER/$NAME"
+./bin/cockpit doctor | sed 's/^/  /'
+echo ""
+echo "Ready.  Next:  bin/jam fetch quakes"

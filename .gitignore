@@ -1,0 +1,11 @@
+# The binaries are built by bin/setup, never vendored.
+bin/cockpit
+bin/plankton
+bin/nekton
+bin/kton
+
+# The team's PRIVATE signing key. Anyone who can read it can sign as this team.
+keys/*.key
+
+.Rproj.user
+.Rhistory

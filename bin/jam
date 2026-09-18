@@ -38,6 +38,18 @@ cmd_fetch() {
   [ -f "$out" ] || die "$script did not produce $out"
   say "$out ($(du -h "$out" | cut -f1))"
 
+  # A dataset is an input, so it is committed, so it is in the repository for good — git does not
+  # forget a blob because you deleted the file. The first version of the warm-up asked the USGS for
+  # the whole world at magnitude 3 and got 130 MB, which was committed before anyone looked. The
+  # criterion is "small enough to move": people re-run these on laptops during the event.
+  local bytes; bytes=$(stat -c%s "$out")
+  if [ "$bytes" -gt 52428800 ]; then
+    rm -f "$out"
+    die "$out is $(numfmt --to=iec "$bytes") — too big to commit, and deleted.
+  Narrow the query in $script: a region, a shorter window, or a higher threshold. Whichever you
+  choose is a sampling decision, so say which in your TASK notes and expect to be asked about it."
+  fi
+
   local cmdline; cmdline="$(sed -n 's/^# *RECORD-AS: *//p' "$script" | head -1)"
   [ -n "$cmdline" ] || cmdline="bash $script"
 

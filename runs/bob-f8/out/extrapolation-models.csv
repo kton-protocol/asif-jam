@@ -1,0 +1,3 @@
+"model","slope_per_year","r_squared","value_2050","value_2100","reaches_zero_in"
+"linear",-0.4629,0.609,6.96,-16.18,2065
+"log-linear",-0.01868,0.606,11.71,4.6,NA
